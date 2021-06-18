@@ -9,17 +9,18 @@ import pyrealsense2 as rs
 import numpy as np
 
 """
-  _   _        _                      _____                     _    _                    
- | | | |  ___ | | _ __    ___  _ __  |  ___|_   _  _ __    ___ | |_ (_)  ___   _ __   ___ 
+  _   _        _                      _____                     _    _
+ | | | |  ___ | | _ __    ___  _ __  |  ___|_   _  _ __    ___ | |_ (_)  ___   _ __   ___
  | |_| | / _ \| || '_ \  / _ \| '__| | |_  | | | || '_ \  / __|| __|| | / _ \ | '_ \ / __|
  |  _  ||  __/| || |_) ||  __/| |    |  _| | |_| || | | || (__ | |_ | || (_) || | | |\__ \
  |_| |_| \___||_|| .__/  \___||_|    |_|    \__,_||_| |_| \___| \__||_| \___/ |_| |_||___/
-                 |_|                                                                      
+                 |_|
 """
 
 
 class Device:
     def __init__(self, pipeline, pipeline_profile):
+        # rs.log_to_console(rs.log_severity.info)
         self.pipeline = pipeline
         self.pipeline_profile = pipeline_profile
 
@@ -103,10 +104,10 @@ def post_process_depth_frame(depth_frame, decimation_magnitude=1.0, spatial_magn
 
 
 """
-  __  __         _           ____               _                _   
- |  \/  |  __ _ (_) _ __    / ___| ___   _ __  | |_  ___  _ __  | |_ 
+  __  __         _           ____               _                _
+ |  \/  |  __ _ (_) _ __    / ___| ___   _ __  | |_  ___  _ __  | |_
  | |\/| | / _` || || '_ \  | |    / _ \ | '_ \ | __|/ _ \| '_ \ | __|
- | |  | || (_| || || | | | | |___| (_) || | | || |_|  __/| | | || |_ 
+ | |  | || (_| || || | | | | |___| (_) || | | || |_|  __/| | | || |_
  |_|  |_| \__,_||_||_| |_|  \____|\___/ |_| |_| \__|\___||_| |_| \__|
 
 """
@@ -133,18 +134,7 @@ class DeviceManager:
         self._config = pipeline_configuration
         self._frame_counter = 0
 
-    def enable_device(self, device_serial, enable_ir_emitter):
-        """
-        Enable an Intel RealSense Device
-
-        Parameters:
-        -----------
-        device_serial     : string
-                            Serial number of the realsense device
-        enable_ir_emitter : bool
-                            Enable/Disable the IR-Emitter of the device
-
-        """
+    def enable_device(self, device_serial):
         pipeline = rs.pipeline()
 
         # Enable the device
@@ -153,7 +143,6 @@ class DeviceManager:
 
         # Set the acquisition parameters
         sensor = pipeline_profile.get_device().first_depth_sensor()
-        sensor.set_option(rs.option.emitter_enabled, 1 if enable_ir_emitter else 0)
         self._enabled_devices[device_serial] = (Device(pipeline, pipeline_profile))
 
     def enable_all_devices(self, enable_ir_emitter=False):
@@ -164,19 +153,8 @@ class DeviceManager:
         print(str(len(self._available_devices)) + " devices have been found")
 
         for serial in self._available_devices:
-            self.enable_device(serial, enable_ir_emitter)
+            self.enable_device(serial)
 
-    def enable_emitter(self, enable_ir_emitter=True):
-        """
-        Enable/Disable the emitter of the intel realsense device
-
-        """
-        for (device_serial, device) in self._enabled_devices.items():
-            # Get the active profile and enable the emitter for all the connected devices
-            sensor = device.pipeline_profile.get_device().first_depth_sensor()
-            sensor.set_option(rs.option.emitter_enabled, 1 if enable_ir_emitter else 0)
-            if enable_ir_emitter:
-                sensor.set_option(rs.option.laser_power, 330)
 
     def load_settings_json(self, path_to_settings_file):
         """
@@ -195,32 +173,30 @@ class DeviceManager:
 
     def poll_frames(self):
         """
-        Poll for frames from the enabled Intel RealSense devices. This will return at least one frame from each device. 
+        Poll for frames from the enabled Intel RealSense devices. This will return at least one frame from each device.
         If temporal post processing is enabled, the depth stream is averaged over a certain amount of frames
-        
+
         Parameters:
         -----------
         """
         frames = {}
+
         while len(frames) < len(self._enabled_devices.items()) :
             for (serial, device) in self._enabled_devices.items():
                 streams = device.pipeline_profile.get_streams()
                 frameset = device.pipeline.poll_for_frames() #frameset will be a pyrealsense2.composite_frame object
                 if frameset.size() == len(streams):
+                    frameset = rs.align(rs.stream.color).process(frameset.as_frameset())
                     frames[serial] = {}
                     for stream in streams:
-                        if (rs.stream.infrared == stream.stream_type()):
-                            frame = frameset.get_infrared_frame(stream.stream_index())
-                            key_ = (stream.stream_type(), stream.stream_index())
-                        else:
-                            frame = frameset.first_or_default(stream.stream_type())
-                            key_ = stream.stream_type()
+                        frame = frameset.first_or_default(stream.stream_type())
+                        key_ = stream.stream_type()
                         frames[serial][key_] = frame
 
         return frames
 
     def get_depth_shape(self):
-        """ 
+        """
         Retruns width and height of the depth stream for one arbitrary device
 
         Returns:
@@ -290,12 +266,12 @@ class DeviceManager:
 
 
 """
-  _____           _    _               
- |_   _|___  ___ | |_ (_) _ __    __ _ 
+  _____           _    _
+ |_   _|___  ___ | |_ (_) _ __    __ _
    | | / _ \/ __|| __|| || '_ \  / _` |
    | ||  __/\__ \| |_ | || | | || (_| |
    |_| \___||___/ \__||_||_| |_| \__, |
-                                  |___/ 
+                                  |___/
 
 """
 if __name__ == "__main__":

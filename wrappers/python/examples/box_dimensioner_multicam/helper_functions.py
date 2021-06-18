@@ -70,7 +70,7 @@ def get_chessboard_points_3D(chessboard_params):
 	return objp.transpose() * square_size
 
 
-def cv_find_chessboard(depth_frame, infrared_frame, chessboard_params):
+def cv_find_chessboard(color_frame, chessboard_params):
 	"""
 	Searches the chessboard corners using the set infrared image and the
 	checkerboard size
@@ -83,14 +83,16 @@ def cv_find_chessboard(depth_frame, infrared_frame, chessboard_params):
 						  (2,N) matrix with the image coordinates of the chessboard corners
 	"""
 	assert(len(chessboard_params) == 3)
-	infrared_image = np.asanyarray(infrared_frame.get_data())
+	color_image = np.asanyarray(color_frame.get_data())
+	print(color_image.shape)
+	color_image_grayscale = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 	criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 	chessboard_found = False
-	chessboard_found, corners = cv2.findChessboardCorners(infrared_image, (
+	chessboard_found, corners = cv2.findChessboardCorners(color_image_grayscale, (
 	chessboard_params[0], chessboard_params[1]))
 
 	if chessboard_found:
-		corners = cv2.cornerSubPix(infrared_image, corners, (11,11),(-1,-1), criteria)
+		corners = cv2.cornerSubPix(color_image_grayscale, corners, (11,11),(-1,-1), criteria)
 		corners = np.transpose(corners, (2,0,1))
 	return chessboard_found, corners
 
@@ -168,7 +170,7 @@ def convert_depth_frame_to_pointcloud(depth_image, camera_intrinsics ):
 		The z values of the pointcloud in meters
 
 	"""
-	
+
 	[height, width] = depth_image.shape
 
 	nx = np.linspace(0, width-1, width)
@@ -225,17 +227,17 @@ def convert_pointcloud_to_depth(pointcloud, camera_intrinsics):
 def get_boundary_corners_2D(points):
 	"""
 	Get the minimum and maximum point from the array of points
-	
+
 	Parameters:
 	-----------
 	points 	 	 : array
 						   The array of points out of which the min and max X and Y points are needed
-	
+
 	Return:
 	----------
 	boundary : array
 		The values arranged as [minX, maxX, minY, maxY]
-	
+
 	"""
 	padding=0.05
 	if points.shape[0] == 3:
@@ -257,19 +259,19 @@ def get_boundary_corners_2D(points):
 def get_clipped_pointcloud(pointcloud, boundary):
 	"""
 	Get the clipped pointcloud withing the X and Y bounds specified in the boundary
-	
+
 	Parameters:
 	-----------
 	pointcloud 	 	 : array
 						   The input pointcloud which needs to be clipped
 	boundary      : array
-										The X and Y bounds 
-	
+										The X and Y bounds
+
 	Return:
 	----------
 	pointcloud : array
 		The clipped pointcloud
-	
+
 	"""
 	assert (pointcloud.shape[0]>=2)
 	pointcloud = pointcloud[:,np.logical_and(pointcloud[0,:]<boundary[1], pointcloud[0,:]>boundary[0])]

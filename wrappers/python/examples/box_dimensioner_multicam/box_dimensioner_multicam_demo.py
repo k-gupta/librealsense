@@ -25,28 +25,30 @@ from helper_functions import get_boundary_corners_2D
 from measurement_task import calculate_boundingbox_points, calculate_cumulative_pointcloud, visualise_measurements
 
 def run_demo():
-	
-	# Define some constants 
-	resolution_width = 1280 # pixels
-	resolution_height = 720 # pixels
-	frame_rate = 15  # fps
+
+	# Define some constants
+	resolution_width_color = 1920 # pixels
+	resolution_height_color = 1080 # pixels
+	frame_rate = 30  # fps
+
+	resolution_width_depth = 1024 # pixels
+	resolution_height_depth = 768 # pixels
 	dispose_frames_for_stablisation = 30  # frames
-	
+
 	chessboard_width = 6 # squares
 	chessboard_height = 9 	# squares
-	square_size = 0.0253 # meters
+	square_size = 0.023 # 0.0253 # meters
 
 	try:
 		# Enable the streams from all the intel realsense devices
 		rs_config = rs.config()
-		rs_config.enable_stream(rs.stream.depth, resolution_width, resolution_height, rs.format.z16, frame_rate)
-		rs_config.enable_stream(rs.stream.infrared, 1, resolution_width, resolution_height, rs.format.y8, frame_rate)
-		rs_config.enable_stream(rs.stream.color, resolution_width, resolution_height, rs.format.bgr8, frame_rate)
+		rs_config.enable_stream(rs.stream.depth, resolution_width_depth, resolution_height_depth, rs.format.z16, frame_rate)
+		rs_config.enable_stream(rs.stream.color, resolution_width_color, resolution_height_color, rs.format.bgr8, frame_rate)
 
 		# Use the device manager class to enable the devices and get the frames
 		device_manager = DeviceManager(rs.context(), rs_config)
 		device_manager.enable_all_devices()
-		
+
 		# Allow some frames for the auto-exposure controller to stablise
 		for frame in range(dispose_frames_for_stablisation):
 			frames = device_manager.poll_frames()
@@ -56,14 +58,14 @@ def run_demo():
 		1: Calibration
 		Calibrate all the available devices to the world co-ordinates.
 		For this purpose, a chessboard printout for use with opencv based calibration process is needed.
-		
+
 		"""
-		# Get the intrinsics of the realsense device 
+		# Get the intrinsics of the realsense device
 		intrinsics_devices = device_manager.get_device_intrinsics(frames)
-		
-                # Set the chessboard parameters for calibration 
-		chessboard_params = [chessboard_height, chessboard_width, square_size] 
-		
+
+                # Set the chessboard parameters for calibration
+		chessboard_params = [chessboard_height, chessboard_width, square_size]
+
 		# Estimate the pose of the chessboard in the world coordinate using the Kabsch Method
 		calibrated_device_count = 0
 		while calibrated_device_count < len(device_manager._available_devices):
@@ -73,19 +75,21 @@ def run_demo():
 			object_point = pose_estimator.get_chessboard_corners_in3d()
 			calibrated_device_count = 0
 			for device in device_manager._available_devices:
-				if not transformation_result_kabsch[device][0]:
-					print("Place the chessboard on the plane where the object needs to be detected..")
-				else:
-					calibrated_device_count += 1
+				if device in transformation_result_kabsch:
+					if not transformation_result_kabsch[device][0]:
+						print("Place the chessboard on the plane where the object needs to be detected..")
+					else:
+						calibrated_device_count += 1
 
 		# Save the transformation object for all devices in an array to use for measurements
 		transformation_devices={}
 		chessboard_points_cumulative_3d = np.array([-1,-1,-1]).transpose()
 		for device in device_manager._available_devices:
-			transformation_devices[device] = transformation_result_kabsch[device][1].inverse()
-			points3D = object_point[device][2][:,object_point[device][3]]
-			points3D = transformation_devices[device].apply_transformation(points3D)
-			chessboard_points_cumulative_3d = np.column_stack( (chessboard_points_cumulative_3d,points3D) )
+			if device in transformation_result_kabsch:
+				transformation_devices[device] = transformation_result_kabsch[device][1].inverse()
+				points3D = object_point[device][2][:,object_point[device][3]]
+				points3D = transformation_devices[device].apply_transformation(points3D)
+				chessboard_points_cumulative_3d = np.column_stack( (chessboard_points_cumulative_3d,points3D) )
 
 		# Extract the bounds between which the object's dimensions are needed
 		# It is necessary for this demo that the object's length and breath is smaller than that of the chessboard
@@ -103,10 +107,10 @@ def run_demo():
                 """
 
 		# Enable the emitter of the devices
-		device_manager.enable_emitter(True)
+		# device_manager.enable_emitter(True)
 
-		# Load the JSON settings file in order to enable High Accuracy preset for the realsense
-		device_manager.load_settings_json("./HighResHighAccuracyPreset.json")
+		# # Load the JSON settings file in order to enable High Accuracy preset for the realsense
+		# device_manager.load_settings_json("./HighResHighAccuracyPreset.json")
 
 		# Get the extrinsics of the device to be used later
 		extrinsics_devices = device_manager.get_depth_to_color_extrinsics(frames)
@@ -133,11 +137,11 @@ def run_demo():
 
 	except KeyboardInterrupt:
 		print("The program was interupted by the user. Closing the program...")
-	
+
 	finally:
 		device_manager.disable_streams()
 		cv2.destroyAllWindows()
-	
-	
+
+
 if __name__ == "__main__":
 	run_demo()
